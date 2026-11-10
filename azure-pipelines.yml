@@ -35,55 +35,55 @@ pool:
 # Stage 1: Bootstrap — Create backend storage (idempotent)
 # =============================================================================
 stages:
-#   - stage: Bootstrap
-#     displayName: 'Bootstrap — Backend Storage'
-#     jobs:
-#       - job: CreateBackend
-#         displayName: 'Create TF Backend'
-#         steps:
-#           - checkout: self
-#             persistCredentials: true
-#           - checkout: app
+  - stage: Bootstrap
+    displayName: 'Bootstrap — Backend Storage'
+    jobs:
+      - job: CreateBackend
+        displayName: 'Create TF Backend'
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
 
-#           - template: pipelines/templates/bootstrap.yml
+          - template: pipelines/templates/bootstrap.yml
 
-# # =============================================================================
-# # Stage 2: Infra — Terraform Apply (dev environment)
-# # Publishes tf-outputs.json as pipeline artifact for downstream stages.
-# # =============================================================================
-#   - stage: Infra
-#     displayName: 'Infra — Terraform Apply (dev)'
-#     dependsOn: Bootstrap
-#     jobs:
-#       - job: TerraformApply
-#         displayName: 'Terraform Init + Plan + Apply'
-#         variables:
-#           - template: pipelines/variables/dev.yml
-#         steps:
-#           - checkout: self
-#             persistCredentials: true
-#           - checkout: app
+# =============================================================================
+# Stage 2: Infra — Terraform Apply (dev environment)
+# Publishes tf-outputs.json as pipeline artifact for downstream stages.
+# =============================================================================
+  - stage: Infra
+    displayName: 'Infra — Terraform Apply (dev)'
+    dependsOn: Bootstrap
+    jobs:
+      - job: TerraformApply
+        displayName: 'Terraform Init + Plan + Apply'
+        variables:
+          - template: pipelines/variables/dev.yml
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
 
-#           - template: pipelines/templates/terraform-apply.yml
-#             parameters:
-#               varFile: $(tfVarsFile)
+          - template: pipelines/templates/terraform-apply.yml
+            parameters:
+              varFile: $(tfVarsFile)
 
-# # =============================================================================
-# # Stage 3: Build — Docker Build + Trivy Scan + SBOM + ACR Push
-# # Downloads tf-outputs artifact to get ACR info.
-# # =============================================================================
-#   - stage: Build
-#     displayName: 'Build — Docker + Trivy + ACR'
-#     dependsOn: Infra
-#     jobs:
-#       - job: BuildScanPush
-#         displayName: 'Build + Scan + Push'
-#         steps:
-#           - checkout: self
-#             persistCredentials: true
-#           - checkout: app
+# =============================================================================
+# Stage 3: Build — Docker Build + Trivy Scan + SBOM + ACR Push
+# Downloads tf-outputs artifact to get ACR info.
+# =============================================================================
+  - stage: Build
+    displayName: 'Build — Docker + Trivy + ACR'
+    dependsOn: Infra
+    jobs:
+      - job: BuildScanPush
+        displayName: 'Build + Scan + Push'
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
 
-#           - template: pipelines/templates/build-scan-push.yml
+          - template: pipelines/templates/build-scan-push.yml
 
 # =============================================================================
 # Stage 4: Deploy Dev — Helm deploy to dev namespace (auto)
@@ -91,7 +91,7 @@ stages:
 # =============================================================================
   - stage: DeployDev
     displayName: 'Deploy — Dev'
-    # dependsOn: Build
+    dependsOn: Build
     jobs:
       - deployment: DeployToDev
         displayName: 'Helm Deploy to dev'
