@@ -13,27 +13,26 @@ This project is about **pipeline architecture**, not just CI/CD. While P3 proved
 | Concept | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|
 | Execution pattern | Inline Bash + PowerShell | Bash script files | PowerShell .ps1 engines | **YAML templates + DRY helpers** |
-| Pipeline structure | Flat, 4 stages | Flat, 5 stages | Flat, 4 stages | **Templated, 6 stages** |
+| Pipeline structure | Flat, 4 stages | Flat, 5 stages | Flat, 4 stages | **Templated, 5 stages** |
 | Environments | Single (dev) | None (ACR only) | Single (dev) | **Multi-env: dev → staging** |
 | Variable management | Variable group only | Variable group only | Variable group only | **Variable templates per env** |
 | Terraform outputs | Re-init per stage | N/A | Re-init per stage | **Pipeline artifacts** |
 | Branch strategy | All pushes deploy | All pushes deploy | All pushes deploy | **Branch conditions** |
 | Shared code | None | None | Copy-paste | **DRY helper modules** |
 | Approval gates | None | None | None | **ADO Environment gates** |
-| Notification | None | None | None | **Webhook on complete** |
 
 ## Architecture
 
-![Pipeline Architecture](docs/01-pipeline-full-run.png)
+![Pipeline Architecture](docs/architecture.png)
 
 ### Pipeline Flow
 
 ```
 feature/* branch push:
-  Bootstrap → Infra(dev) → Build → Deploy(dev) → Notify
+  Bootstrap → Infra(dev) → Build → Deploy(dev)
 
 main branch push:
-  Bootstrap → Infra(dev) → Build → Deploy(dev) → [Approval Gate] → Deploy(staging) → Notify
+  Bootstrap → Infra(dev) → Build → Deploy(dev) → [Approval Gate] → Deploy(staging)
 ```
 
 ### Infrastructure
@@ -91,7 +90,8 @@ steps:
     valuesFile: values-dev.yaml
 ```
 
-**6 templates in this project:**
+**5 templates in this project:**
+
 | Template | Purpose |
 |---|---|
 | `bootstrap.yml` | Create Terraform backend storage (idempotent) |
@@ -99,7 +99,6 @@ steps:
 | `build-scan-push.yml` | Docker build + Trivy scan + SBOM + ACR push |
 | `helm-deploy.yml` | Helm upgrade/install + rollout check + smoke test |
 | `terraform-destroy.yml` | Destroy infra + delete backend RG |
-| `notify.yml` | Webhook notification (success/failure) |
 
 ### Variable Templates (pipelines/variables/)
 
@@ -176,8 +175,7 @@ atlas-04-pipeline-mastery-ado/
 │   │   ├── terraform-apply.yml
 │   │   ├── terraform-destroy.yml
 │   │   ├── build-scan-push.yml
-│   │   ├── helm-deploy.yml
-│   │   └── notify.yml
+│   │   └── helm-deploy.yml
 │   └── variables/                       # ★ Per-environment variable templates
 │       ├── common.yml
 │       ├── dev.yml
@@ -209,7 +207,7 @@ atlas-04-pipeline-mastery-ado/
 1. **Azure DevOps project** `Atlas-Platform` with service connection `MI-ADO-API` (OIDC)
 2. **ADO repo** `atlas-04-pipeline-mastery-ado` under Atlas-Platform project
 3. **ADO repo** `atlas-platform-app` (the standard workload app)
-4. **Variable group** `atlas-04-vars` (can be empty — variables come from templates)
+4. **Variable group** `atlas-04-vars` with `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`
 5. **Environments** created in ADO:
    - `atlas-04-dev` — no approval gate
    - `atlas-04-staging` — manual approval gate configured
@@ -236,7 +234,27 @@ git commit -m "feat: P4 pipeline mastery — YAML templates + multi-env promotio
 git push origin main
 ```
 
-Pipeline stages: Bootstrap → Infra → Build → Deploy(dev) → Approval → Deploy(staging) → Notify
+Pipeline stages: Bootstrap → Infra → Build → Deploy(dev) → Approval → Deploy(staging)
+
+### Verify
+
+```bash
+# Pods running in both namespaces
+kubectl get pods -n dev
+kubectl get pods -n staging
+
+# Environment-specific config
+kubectl get configmap -n dev -o yaml | Select-String "APP_ENV"      # dev
+kubectl get configmap -n staging -o yaml | Select-String "APP_ENV"  # staging
+
+# HPA only in staging
+kubectl get hpa -n dev        # No resources found
+kubectl get hpa -n staging    # atlas-platform HPA active
+
+# Replica count
+kubectl get deployment -n dev -o wide      # 1 replica
+kubectl get deployment -n staging -o wide   # 2 replicas
+```
 
 ### Destroy
 
@@ -284,34 +302,40 @@ az storage blob lease break \
 
 ## Evidence
 
-Screenshots captured during pipeline execution. Saved in `docs/`.
+**Pipeline — all 5 stages passed (Bootstrap → Infra → Build → Deploy Dev → Deploy Staging):**
 
-| # | Screenshot | Filename | What to Capture |
-|---|---|---|---|
-| 1 | Pipeline full run | `01-pipeline-full-run.png` | All 6 stages green in ADO pipeline view |
-| 2 | Bootstrap stage | `02-bootstrap-stage.png` | Backend storage creation logs |
-| 3 | Terraform plan output | `03-terraform-plan.png` | Plan summary showing resources to create |
-| 4 | Terraform apply output | `04-terraform-apply.png` | Apply complete with resource count |
-| 5 | Pipeline artifact published | `05-pipeline-artifact.png` | ADO → Pipeline run → Artifacts tab showing terraform-outputs |
-| 6 | Docker build | `06-docker-build.png` | Build log showing multi-stage layers |
-| 7 | Trivy scan passed | `07-trivy-scan-passed.png` | Scan output showing zero CRITICAL CVEs |
-| 8 | SBOM generated | `08-sbom-generated.png` | Log line confirming SBOM written |
-| 9 | ACR image pushed | `09-acr-image-pushed.png` | Azure Portal → ACR → Repositories → atlas-platform-app tag |
-| 10 | Deploy dev — Helm output | `10-deploy-dev-helm.png` | Helm upgrade --install output for dev namespace |
-| 11 | Deploy dev — smoke test | `11-deploy-dev-smoke.png` | /health response from inside cluster |
-| 12 | Approval gate pending | `12-approval-gate-pending.png` | ADO showing "Review" button for staging deployment |
-| 13 | Deploy staging — Helm output | `13-deploy-staging-helm.png` | Helm upgrade --install output for staging namespace |
-| 14 | Pods running both namespaces | `14-pods-dev-staging.png` | `kubectl get pods -n dev` + `kubectl get pods -n staging` |
-| 15 | Notify stage | `15-notify-stage.png` | Webhook notification log output |
-| 16 | Destroy pipeline | `16-destroy-pipeline.png` | Destroy pipeline stages completed |
+![Pipeline full run](docs/pipeline-full-run.png)
+
+**Trivy scan — zero CRITICAL CVEs, SBOM generated, image pushed to ACR:**
+
+![Trivy scan passed](docs/trivy-scan-passed.png)
+
+**ACR — image pushed with build tag:**
+
+![ACR image pushed](docs/acr-image-pushed.png)
+
+**Deploy Dev — smoke test /health → 200 OK:**
+
+![Deploy dev smoke test](docs/deploy-dev-smoke.png)
+
+**Approval gate — staging requires manual review (main branch only):**
+
+![Approval gate pending](docs/approval-gate-pending.png)
+
+**Multi-env — pods running in both namespaces, correct replica counts:**
+
+![Pods dev and staging](docs/pods-dev-staging.png)
 
 ## Lessons Learned
 
-*Auto-populated from `logs.json` during pipeline runs. Fill `cause`, `fix`, `prevention` after debugging each failure.*
-
-| Run | Stage | Error | Cause | Fix | Prevention |
-|---|---|---|---|---|---|
-| *(populated by pipeline)* | | | *(fill manually)* | *(fill manually)* | *(fill manually)* |
+| Run | Stage | Error | Cause | Fix |
+|---|---|---|---|---|
+| #1 | Build | `COPY requirements.txt` — file not found | Dockerfile expected app repo files but build context pointed to infra repo | Multi-repo checkout: set Docker build context to `$(appDir)` |
+| #2 | Deploy | `Could not import module "main"` — CrashLoopBackOff | App code nested at `/app/app/main.py`, uvicorn expected `/app/main.py` | Changed CMD to `app.main:app` to match actual directory structure |
+| #3 | Deploy | Smoke test pod not found | Old pod name queried after Helm upgrade replaced it with new ReplicaSet | Added `kubectl wait --for=condition=ready` before pod lookup |
+| #4 | Deploy | `unable to upgrade connection: container not found` | Race condition — exec fired before container was fully ready | Added `kubectl wait` with 60s timeout before smoke test |
+| #5 | Infra | Provider version conflict `~> 3.116` vs `~> 4.14` | Root module pinned azurerm v3, child module pinned v4 | Upgraded all modules to `~> 4.14` for consistency |
+| #6 | Validate | `Unsupported argument: kubernetes_version` | Variable names in root didn't match child module (`kubernetes_version` vs `aks_kubernetes_version`) | Aligned root module args to match child module variable names |
 
 ## Interview Summary
 
@@ -322,19 +346,19 @@ Screenshots captured during pipeline execution. Saved in `docs/`.
 ### Questions This Project Answers
 
 **Q: How do you structure pipelines for multiple environments?**
-A: Variable templates per environment. Adding a new env means one YAML file and one stage — no script changes, no template changes.
+Variable templates per environment. Adding a new env means one YAML file and one stage — no script changes, no template changes.
 
 **Q: How do you avoid duplicating pipeline code across projects?**
-A: YAML templates with typed parameters. The build template works for any Docker image. The deploy template works for any Helm chart. The orchestrator wires them together.
+YAML templates with typed parameters. The build template works for any Docker image. The deploy template works for any Helm chart. The orchestrator wires them together.
 
 **Q: How do you pass data between pipeline stages?**
-A: Pipeline artifacts. Terraform outputs are published once after apply, downloaded by build and deploy stages. No redundant terraform init calls.
+Pipeline artifacts. Terraform outputs are published once after apply, downloaded by build and deploy stages. No redundant terraform init calls.
 
 **Q: How do you handle approvals for production deployments?**
-A: ADO Environments with manual approval gates. The staging stage references the environment — ADO blocks it until approved. Branch conditions ensure only `main` reaches staging.
+ADO Environments with manual approval gates. The staging stage references the environment — ADO blocks it until approved. Branch conditions ensure only `main` reaches staging.
 
 **Q: How do you handle pipeline failures?**
-A: Automated error logging. Every script has try/catch with a shared error context helper. On failure, `log-error.ps1` captures the error, updates `logs.json`, and pushes it to the repo.
+Automated error logging. Every script has try/catch with a shared error context helper. On failure, `log-error.ps1` captures the error, updates `logs.json`, and pushes it to the repo.
 
 ## Related Projects
 
