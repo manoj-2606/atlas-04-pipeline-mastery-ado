@@ -1,0 +1,44 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+tf-outputs.json
+
+# Docker
+*.tar
+
+# Python (atlas-platform-app build context)
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — NEVER commit
+*.pem
+*.key
+*.env
+.env.*
+
+# Trivy / Security scan artifacts
+sbom.json
+trivy-report.json
+
+# Error context (generated during pipeline runs)
+error-context.json
