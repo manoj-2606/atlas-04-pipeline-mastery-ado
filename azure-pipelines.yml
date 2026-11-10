@@ -1,0 +1,164 @@
+# =============================================================================
+# Atlas-04 Pipeline Mastery — Main Deploy Orchestrator
+#
+# Architecture:
+#   - Variable templates provide per-env config (pipelines/variables/)
+#   - Pipeline templates provide reusable steps (pipelines/templates/)
+#   - Scripts do the actual work (scripts/)
+#   - Helpers eliminate duplication (scripts/helpers/)
+#
+# Flow:
+#   feature/* → Bootstrap → Infra(dev) → Build → Deploy(dev) → Notify
+#   main      → Bootstrap → Infra(dev) → Build → Deploy(dev) → [Approval] → Deploy(staging) → Notify
+#
+# Pipeline Artifacts:
+#   Infra stage publishes tf-outputs.json. Build + Deploy stages download it.
+#   Zero redundant terraform init calls.
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+
+resources:
+  repositories:
+    - repository: app
+      type: git
+      name: Atlas-Platform/atlas-platform-app
+
+variables:
+  - template: pipelines/variables/common.yml
+  - group: atlas-04-vars
+
+pool:
+  vmImage: ubuntu-latest
+
+# =============================================================================
+# Stage 1: Bootstrap — Create backend storage (idempotent)
+# =============================================================================
+stages:
+  - stage: Bootstrap
+    displayName: 'Bootstrap — Backend Storage'
+    jobs:
+      - job: CreateBackend
+        displayName: 'Create TF Backend'
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
+
+          - template: pipelines/templates/bootstrap.yml
+
+# =============================================================================
+# Stage 2: Infra — Terraform Apply (dev environment)
+# Publishes tf-outputs.json as pipeline artifact for downstream stages.
+# =============================================================================
+  - stage: Infra
+    displayName: 'Infra — Terraform Apply (dev)'
+    dependsOn: Bootstrap
+    jobs:
+      - job: TerraformApply
+        displayName: 'Terraform Init + Plan + Apply'
+        variables:
+          - template: pipelines/variables/dev.yml
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
+
+          - template: pipelines/templates/terraform-apply.yml
+            parameters:
+              varFile: $(tfVarsFile)
+
+# =============================================================================
+# Stage 3: Build — Docker Build + Trivy Scan + SBOM + ACR Push
+# Downloads tf-outputs artifact to get ACR info.
+# =============================================================================
+  - stage: Build
+    displayName: 'Build — Docker + Trivy + ACR'
+    dependsOn: Infra
+    jobs:
+      - job: BuildScanPush
+        displayName: 'Build + Scan + Push'
+        steps:
+          - checkout: self
+            persistCredentials: true
+          - checkout: app
+
+          - template: pipelines/templates/build-scan-push.yml
+
+# =============================================================================
+# Stage 4: Deploy Dev — Helm deploy to dev namespace (auto)
+# Downloads tf-outputs artifact to get AKS info.
+# =============================================================================
+  - stage: DeployDev
+    displayName: 'Deploy — Dev'
+    dependsOn: Build
+    jobs:
+      - deployment: DeployToDev
+        displayName: 'Helm Deploy to dev'
+        environment: atlas-04-dev
+        variables:
+          - template: pipelines/variables/dev.yml
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: true
+                - checkout: app
+
+                - template: pipelines/templates/helm-deploy.yml
+                  parameters:
+                    namespace: $(namespace)
+                    valuesFile: $(valuesFile)
+
+# =============================================================================
+# Stage 5: Deploy Staging — Helm deploy to staging namespace
+# ONLY runs on main branch. Requires manual approval (ADO Environment gate).
+# =============================================================================
+  - stage: DeployStaging
+    displayName: 'Deploy — Staging (approval required)'
+    dependsOn: DeployDev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToStaging
+        displayName: 'Helm Deploy to staging'
+        environment: atlas-04-staging
+        variables:
+          - template: pipelines/variables/staging.yml
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: true
+                - checkout: app
+
+                - template: pipelines/templates/helm-deploy.yml
+                  parameters:
+                    namespace: $(namespace)
+                    valuesFile: $(valuesFile)
+
+# =============================================================================
+# Stage 6: Notify — Webhook notification (always runs)
+# Reports pipeline result regardless of success/failure.
+# =============================================================================
+  - stage: Notify
+    displayName: 'Notify — Pipeline Result'
+    dependsOn:
+      - DeployDev
+      - DeployStaging
+    condition: always()
+    jobs:
+      - job: SendNotification
+        displayName: 'Send Webhook'
+        # Determine overall status from dependency results
+        variables:
+          pipelineStatus: $[ if(in(stageDependencies.DeployDev.DeployToDev.result, 'Succeeded', 'SucceededWithIssues'), 'succeeded', 'failed') ]
+        steps:
+          - template: pipelines/templates/notify.yml
+            parameters:
+              status: $(pipelineStatus)

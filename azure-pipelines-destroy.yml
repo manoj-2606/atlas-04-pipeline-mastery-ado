@@ -1,0 +1,59 @@
+# =============================================================================
+# Atlas-04 Pipeline Mastery — Destroy Orchestrator
+#
+# Tears down ALL resources created by the deploy pipeline.
+# Order: terraform destroy (needs state) → delete backend RG (removes state)
+#
+# Trigger: manual only (no CI trigger)
+# Environment: atlas-04-destroy (approval gate recommended)
+# =============================================================================
+
+trigger: none
+
+resources:
+  repositories:
+    - repository: app
+      type: git
+      name: Atlas-Platform/atlas-platform-app
+
+variables:
+  - template: pipelines/variables/common.yml
+  - group: atlas-04-vars
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Destroy
+    displayName: 'Destroy — Full Cleanup'
+    jobs:
+      - deployment: DestroyAll
+        displayName: 'Terraform Destroy + Backend Cleanup'
+        environment: atlas-04-destroy
+        variables:
+          - template: pipelines/variables/dev.yml
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: true
+                - checkout: app
+
+                - template: pipelines/templates/terraform-destroy.yml
+                  parameters:
+                    varFile: $(tfVarsFile)
+
+  - stage: NotifyDestroy
+    displayName: 'Notify — Destroy Result'
+    dependsOn: Destroy
+    condition: always()
+    jobs:
+      - job: SendNotification
+        displayName: 'Send Webhook'
+        variables:
+          destroyStatus: $[ if(eq(stageDependencies.Destroy.DestroyAll.result, 'Succeeded'), 'destroyed', 'destroy-failed') ]
+        steps:
+          - template: pipelines/templates/notify.yml
+            parameters:
+              status: $(destroyStatus)
