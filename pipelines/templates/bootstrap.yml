@@ -1,0 +1,29 @@
+# =============================================================================
+# Template: Bootstrap — Create Terraform backend storage (idempotent)
+# Creates: Resource Group + Storage Account + Blob Container
+# Safe to run every time — skips if already exists.
+# =============================================================================
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Bootstrap — Create Backend Storage'
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/bootstrap.ps1
+      arguments: >-
+        -ResourceGroup "$(backendResourceGroup)"
+        -StorageAccount "$(backendStorageAccount)"
+        -Container "$(backendContainer)"
+        -Location "$(location)"
+
+  - task: AzureCLI@2
+    displayName: '[ERROR] Log Bootstrap Failure'
+    condition: failed()
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/log-error.ps1
+      arguments: >-
+        -Stage "Bootstrap"
+        -ProjectDir "$(projectDir)"

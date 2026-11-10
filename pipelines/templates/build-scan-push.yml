@@ -1,0 +1,45 @@
+# =============================================================================
+# Template: Build + Scan + Push
+#
+# 1. Downloads terraform-outputs artifact (gets ACR name without re-init)
+# 2. Docker build (multi-stage, non-root)
+# 3. Trivy scan (zero CRITICAL CVEs allowed)
+# 4. SBOM generation (trivy --format spdx-json)
+# 5. Push to ACR
+#
+# Self-contained — just call this template, it handles artifact download.
+# =============================================================================
+
+steps:
+  # Download terraform outputs from Infra stage
+  - task: DownloadPipelineArtifact@2
+    displayName: 'Download Terraform Outputs'
+    inputs:
+      artifact: '$(tfOutputsArtifact)'
+      path: '$(Pipeline.Workspace)/tf-outputs'
+
+  - task: AzureCLI@2
+    displayName: 'Docker Build + Trivy Scan + ACR Push'
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/build.ps1
+      arguments: >-
+        -TfOutputsPath "$(Pipeline.Workspace)/tf-outputs/$(tfOutputsFile)"
+        -DockerfilePath "$(projectDir)/Dockerfile"
+        -BuildContext "$(appDir)"
+        -ImageName "$(imageName)"
+        -ImageTag "$(imageTag)"
+        -TrivySeverity "$(trivySeverity)"
+        -HelpersDir "$(helpersDir)"
+
+  - task: AzureCLI@2
+    displayName: '[ERROR] Log Build Failure'
+    condition: failed()
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/log-error.ps1
+      arguments: >-
+        -Stage "Build"
+        -ProjectDir "$(projectDir)"

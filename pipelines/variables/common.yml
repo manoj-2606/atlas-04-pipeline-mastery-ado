@@ -1,0 +1,34 @@
+# =============================================================================
+# Common Variables — shared across ALL stages and environments
+# Loaded once at pipeline level. Every template can reference $(varName).
+# =============================================================================
+
+variables:
+  # --- Azure / ADO ---
+  serviceConnection: 'MI-ADO-API'
+  location: 'centralindia'
+
+  # --- Terraform Backend ---
+  backendResourceGroup: 'rg-atlas-tfstate'
+  backendStorageAccount: 'atlastfstate2606'
+  backendContainer: 'tfstate'
+  backendKey: 'atlas-04.tfstate'
+
+  # --- Paths (multi-repo checkout layout) ---
+  projectDir: '$(Build.SourcesDirectory)/atlas-04-pipeline-mastery-ado'
+  appDir: '$(Build.SourcesDirectory)/atlas-platform-app'
+  scriptsDir: '$(Build.SourcesDirectory)/atlas-04-pipeline-mastery-ado/scripts'
+  helpersDir: '$(Build.SourcesDirectory)/atlas-04-pipeline-mastery-ado/scripts/helpers'
+  tfDir: '$(Build.SourcesDirectory)/atlas-04-pipeline-mastery-ado/terraform'
+  chartsDir: '$(Build.SourcesDirectory)/atlas-04-pipeline-mastery-ado/charts/atlas-platform'
+
+  # --- Docker / ACR ---
+  imageName: 'atlas-platform-app'
+  imageTag: '$(Build.BuildId)'
+
+  # --- Security ---
+  trivySeverity: 'CRITICAL'
+
+  # --- Pipeline Artifacts ---
+  tfOutputsArtifact: 'terraform-outputs'
+  tfOutputsFile: 'tf-outputs.json'

@@ -1,0 +1,10 @@
+# =============================================================================
+# Dev Environment Variables
+# Loaded per-stage: stages that target dev include this template.
+# =============================================================================
+
+variables:
+  environment: 'dev'
+  namespace: 'dev'
+  tfVarsFile: 'environments/dev.tfvars'
+  valuesFile: 'values-dev.yaml'

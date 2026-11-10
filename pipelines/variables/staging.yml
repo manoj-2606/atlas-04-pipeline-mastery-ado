@@ -1,0 +1,10 @@
+# =============================================================================
+# Staging Environment Variables
+# Loaded per-stage: staging deployment stage includes this template.
+# Note: Staging uses same AKS cluster as dev (different namespace + values).
+# =============================================================================
+
+variables:
+  environment: 'staging'
+  namespace: 'staging'
+  valuesFile: 'values-staging.yaml'

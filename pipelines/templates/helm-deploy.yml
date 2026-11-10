@@ -1,0 +1,54 @@
+# =============================================================================
+# Template: Helm Deploy + Smoke Test
+#
+# 1. Downloads terraform-outputs artifact (gets AKS + ACR info)
+# 2. az aks get-credentials
+# 3. helm upgrade --install with per-env values file
+# 4. kubectl rollout status (wait for healthy)
+# 5. Smoke test: curl /health from inside cluster
+#
+# Parameters:
+#   namespace  — K8s namespace to deploy into (dev, staging)
+#   valuesFile — Helm values file name (values-dev.yaml, values-staging.yaml)
+# =============================================================================
+
+parameters:
+  - name: namespace
+    type: string
+  - name: valuesFile
+    type: string
+
+steps:
+  # Download terraform outputs from Infra stage
+  - task: DownloadPipelineArtifact@2
+    displayName: 'Download Terraform Outputs'
+    inputs:
+      artifact: '$(tfOutputsArtifact)'
+      path: '$(Pipeline.Workspace)/tf-outputs'
+
+  - task: AzureCLI@2
+    displayName: 'Helm Deploy to ${{ parameters.namespace }}'
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/deploy.ps1
+      arguments: >-
+        -TfOutputsPath "$(Pipeline.Workspace)/tf-outputs/$(tfOutputsFile)"
+        -ChartPath "$(chartsDir)"
+        -ValuesFile "${{ parameters.valuesFile }}"
+        -Namespace "${{ parameters.namespace }}"
+        -ReleaseName "atlas-platform-${{ parameters.namespace }}"
+        -ImageName "$(imageName)"
+        -ImageTag "$(imageTag)"
+        -HelpersDir "$(helpersDir)"
+
+  - task: AzureCLI@2
+    displayName: '[ERROR] Log Deploy Failure'
+    condition: failed()
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/log-error.ps1
+      arguments: >-
+        -Stage "Deploy-${{ parameters.namespace }}"
+        -ProjectDir "$(projectDir)"

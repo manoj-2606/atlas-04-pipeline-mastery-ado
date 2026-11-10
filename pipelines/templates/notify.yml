@@ -1,0 +1,50 @@
+# =============================================================================
+# Template: Webhook Notification
+#
+# Sends pipeline result to a webhook endpoint (Slack, Teams, custom).
+# Uses inline PowerShell — simple enough to not need a separate script.
+#
+# Parameters:
+#   status     — 'succeeded' or 'failed' (passed by orchestrator)
+#   webhookUrl — target URL (optional — skips if empty, no error)
+# =============================================================================
+
+parameters:
+  - name: status
+    type: string
+    default: 'unknown'
+  - name: webhookUrl
+    type: string
+    default: ''
+
+steps:
+  - powershell: |
+      $webhookUrl = "${{ parameters.webhookUrl }}"
+
+      if (-not $webhookUrl) {
+          Write-Host "##[warning]No webhook URL configured — skipping notification"
+          return
+      }
+
+      $payload = @{
+          pipeline  = "$(Build.DefinitionName)"
+          run       = "$(Build.BuildNumber)"
+          status    = "${{ parameters.status }}"
+          branch    = "$(Build.SourceBranch)"
+          commit    = "$(Build.SourceVersion)"
+          author    = "$(Build.RequestedFor)"
+          timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
+          url       = "$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+      } | ConvertTo-Json -Depth 3
+
+      try {
+          $response = Invoke-RestMethod -Uri $webhookUrl -Method POST `
+              -ContentType "application/json" -Body $payload
+          Write-Host "##[section]Notification sent — status: ${{ parameters.status }}"
+      }
+      catch {
+          # Notification failure should NOT fail the pipeline
+          Write-Host "##[warning]Webhook notification failed: $($_.Exception.Message)"
+      }
+    displayName: 'Notify — Pipeline ${{ parameters.status }}'
+    condition: always()

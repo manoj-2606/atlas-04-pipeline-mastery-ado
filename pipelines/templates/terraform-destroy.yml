@@ -1,0 +1,44 @@
+# =============================================================================
+# Template: Terraform Destroy — Tear down infra + delete backend RG
+#
+# Order matters:
+# 1. terraform destroy (needs state file → backend must exist)
+# 2. Delete backend RG (removes state storage)
+#
+# Parameters:
+#   varFile — relative path to tfvars file
+# =============================================================================
+
+parameters:
+  - name: varFile
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Terraform Destroy + Cleanup'
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/destroy.ps1
+      arguments: >-
+        -TfDir "$(tfDir)"
+        -VarFile "${{ parameters.varFile }}"
+        -BackendKey "$(backendKey)"
+        -BackendResourceGroup "$(backendResourceGroup)"
+        -BackendStorageAccount "$(backendStorageAccount)"
+        -BackendContainer "$(backendContainer)"
+        -HelpersDir "$(helpersDir)"
+      addSpnToEnvironment: true
+    env:
+      ARM_USE_OIDC: 'true'
+
+  - task: AzureCLI@2
+    displayName: '[ERROR] Log Destroy Failure'
+    condition: failed()
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/log-error.ps1
+      arguments: >-
+        -Stage "Destroy"
+        -ProjectDir "$(projectDir)"

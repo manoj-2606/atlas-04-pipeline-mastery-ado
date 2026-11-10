@@ -1,0 +1,54 @@
+# =============================================================================
+# Template: Terraform Apply — Init + Plan + Apply + Publish Outputs
+#
+# Key optimization over P3:
+# After apply, runs `terraform output -json > tf-outputs.json` and publishes
+# it as a pipeline artifact. Downstream stages (Build, Deploy) download this
+# artifact instead of re-running terraform init + output. Saves ~30s per stage.
+#
+# Parameters:
+#   varFile — relative path to tfvars file (e.g., environments/dev.tfvars)
+# =============================================================================
+
+parameters:
+  - name: varFile
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Terraform — Init + Plan + Apply'
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/infra.ps1
+      arguments: >-
+        -TfDir "$(tfDir)"
+        -VarFile "${{ parameters.varFile }}"
+        -BackendKey "$(backendKey)"
+        -BackendResourceGroup "$(backendResourceGroup)"
+        -BackendStorageAccount "$(backendStorageAccount)"
+        -BackendContainer "$(backendContainer)"
+        -HelpersDir "$(helpersDir)"
+      addSpnToEnvironment: true
+    env:
+      ARM_USE_OIDC: 'true'
+
+  # Publish terraform outputs as pipeline artifact
+  # Build + Deploy stages download this instead of re-running terraform init
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Terraform Outputs Artifact'
+    condition: succeeded()
+    inputs:
+      targetPath: '$(tfDir)/$(tfOutputsFile)'
+      artifact: '$(tfOutputsArtifact)'
+
+  - task: AzureCLI@2
+    displayName: '[ERROR] Log Infra Failure'
+    condition: failed()
+    inputs:
+      azureSubscription: $(serviceConnection)
+      scriptType: pscore
+      scriptPath: $(scriptsDir)/log-error.ps1
+      arguments: >-
+        -Stage "Infra"
+        -ProjectDir "$(projectDir)"
