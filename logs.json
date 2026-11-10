@@ -1,1 +1,12 @@
-[]
+{
+  "run": "20261110.1",
+  "stage": "Deploy-dev",
+  "error": "Helm deploy failed: Release \"atlas-platform-dev\" does not exist. Installing it now.; Error: resource Deployment/dev/atlas-platform-dev-atlas-platform-app not ready. status: InProgress, message: Available: 0/1; context deadline exceeded; ",
+  "script": "deploy.ps1",
+  "scriptLine": "76",
+  "timestamp": "2026-11-10T09:32:06Z",
+  "branch": "refs/heads/main",
+  "cause": "",
+  "fix": "",
+  "prevention": ""
+}
