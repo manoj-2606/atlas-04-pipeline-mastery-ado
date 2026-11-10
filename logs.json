@@ -34,5 +34,17 @@
     "cause": "",
     "fix": "",
     "prevention": ""
+  },
+  {
+    "run": "20261110.5",
+    "stage": "Deploy-dev",
+    "error": "Smoke test failed: error: Internal error occurred: unable to upgrade connection: container not found (\"atlas-platform-app\")\n",
+    "script": "deploy.ps1",
+    "scriptLine": "116",
+    "timestamp": "2026-11-10T10:14:13Z",
+    "branch": "refs/heads/main",
+    "cause": "",
+    "fix": "",
+    "prevention": ""
   }
 ]
