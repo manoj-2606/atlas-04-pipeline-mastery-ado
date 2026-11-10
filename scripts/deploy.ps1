@@ -99,6 +99,7 @@ try {
     # Get a running pod name
     $podName = kubectl get pods --namespace $Namespace `
         -l "app.kubernetes.io/name=atlas-platform-app" `
+        --field-selector=status.phase=Running `
         -o jsonpath='{.items[0].metadata.name}' 2>&1 | Out-String
     $podName = $podName.Trim()
 
