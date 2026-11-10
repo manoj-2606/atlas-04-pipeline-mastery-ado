@@ -22,5 +22,17 @@
     "cause": "",
     "fix": "",
     "prevention": ""
+  },
+  {
+    "run": "20261110.4",
+    "stage": "Deploy-dev",
+    "error": "Smoke test failed: Error from server (NotFound): pods \"atlas-platform-dev-atlas-platform-app-589cc99c77-sqg2t\" not found\n",
+    "script": "deploy.ps1",
+    "scriptLine": "115",
+    "timestamp": "2026-11-10T10:03:22Z",
+    "branch": "refs/heads/main",
+    "cause": "",
+    "fix": "",
+    "prevention": ""
   }
 ]
