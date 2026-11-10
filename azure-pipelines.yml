@@ -16,11 +16,7 @@
 #   Zero redundant terraform init calls.
 # =============================================================================
 
-trigger:
-  branches:
-    include:
-      - main
-      - feature/*
+trigger: none
 
 resources:
   repositories:
