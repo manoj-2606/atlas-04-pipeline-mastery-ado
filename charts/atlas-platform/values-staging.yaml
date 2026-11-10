@@ -1,0 +1,25 @@
+# =============================================================================
+# Staging Overrides — closer to production than dev
+# Higher replicas, tighter limits, info-level logging
+# Demonstrates multi-env promotion: dev (loose) → staging (strict) → prod
+# =============================================================================
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+config:
+  environment: "staging"
+  logLevel: "info"

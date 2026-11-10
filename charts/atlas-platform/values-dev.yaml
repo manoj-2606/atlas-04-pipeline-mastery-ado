@@ -1,0 +1,24 @@
+# =============================================================================
+# Dev Overrides — relaxed for development/testing
+# Lower replicas, smaller limits, debug logging
+# =============================================================================
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 192Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 80
+
+config:
+  environment: "dev"
+  logLevel: "debug"

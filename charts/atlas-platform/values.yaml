@@ -1,0 +1,59 @@
+# =============================================================================
+# Default Values — overridden by values-dev.yaml / values-staging.yaml
+# These are production-safe defaults (strictest settings)
+# =============================================================================
+
+replicaCount: 2
+
+image:
+  repository: ""    # Set by pipeline: acr_login_server/atlas-platform-app
+  tag: ""           # Set by pipeline: Build.BuildId
+  pullPolicy: IfNotPresent
+
+nameOverride: "atlas-platform-app"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+probes:
+  liveness:
+    path: /health
+    port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    failureThreshold: 3
+  readiness:
+    path: /health
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+config:
+  appName: "atlas-platform-app"
+  environment: "production"
+  logLevel: "warning"
+
+securityContext:
+  runAsUser: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+automountServiceAccountToken: false
