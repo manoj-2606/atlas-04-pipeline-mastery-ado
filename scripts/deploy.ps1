@@ -96,6 +96,13 @@ try {
     # --- Smoke Test ---
     Write-Host "##[section]Smoke Test — /health endpoint"
 
+    # Wait for pod to be fully ready
+    Write-Host "  Waiting for pod readiness..."
+    kubectl wait --for=condition=ready pod `
+        -l "app.kubernetes.io/name=atlas-platform-app" `
+        --namespace $Namespace `
+        --timeout=60s 2>&1 | Out-Null
+
     # Get a running pod name
     $podName = kubectl get pods --namespace $Namespace `
         -l "app.kubernetes.io/name=atlas-platform-app" `
