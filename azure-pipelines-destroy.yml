@@ -52,8 +52,8 @@ stages:
       - job: SendNotification
         displayName: 'Send Webhook'
         variables:
-          destroyStatus: $[ if(eq(stageDependencies.Destroy.DestroyAll.result, 'Succeeded'), 'destroyed', 'destroy-failed') ]
+          pipelineStatus: $[ coalesce(replace(replace(stageDependencies.Destroy.DestroyAll.result, 'Succeeded', 'succeeded'), 'SucceededWithIssues', 'succeeded'), 'failed') ]
         steps:
           - template: pipelines/templates/notify.yml
             parameters:
-              status: $(destroyStatus)
+              status: $(pipelineStatus)
